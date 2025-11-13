@@ -1,0 +1,288 @@
+# 🎾 Tennis Friends — MVP PRD v1.0 (Cursor AI 개발용)
+
+---
+
+## Goal
+
+**근거리·시간대 기반의 신뢰 중심 테니스 매칭 앱**
+
+Flutter + Firebase 기반 MVP로 출시하며, **심플한 매칭, 안정적인 신뢰, 원활한 소통**을 핵심 가치로 둔다.
+
+---
+
+## Acceptance
+
+* 카카오 로그인 + 전화번호 인증 정상 작동
+* 온보딩 시 닉네임·지역(집/직장)·NTRP 입력 완료
+* 홈·매칭탭에서 매칭 탐색 및 등록 가능
+* 신청/승인/대기자 트랜잭션 정상 처리
+* 채팅 자동 생성 및 알림(FCM) 연동
+* 내정보에서 프로필·신청내역·매칭이력 확인
+* 매너온도 내부 저장, UI 비노출
+* 소프트 필터 기반으로 근거리+시간 유사 매칭 fallback 표시
+* Firestore/Functions/Rules 테스트 통과
+
+---
+
+## Scope
+
+* Flutter App: `/lib/features/{auth, onboarding, match, chat, profile}`
+* Firebase Modules: Auth, Firestore, Functions, FCM
+* State Mgmt: Riverpod
+* Routing: go_router
+* Data Model: freezed + json_serializable
+
+---
+
+## Clarify
+
+* 로그인은 **카카오 SDK + Firebase 커스텀토큰**
+* 본인인증은 Firebase Phone Auth
+* 지역은 집·직장 2개 (문자열 저장, 추후 좌표 확장)
+* 매칭의 단위는 "1개의 경기(시간·장소 기준)"
+* 채팅은 매칭 확정자들 간 자동 생성 (단체채팅)
+* 리뷰/매너는 내부 데이터만, MVP UI 비노출
+* 앱 언어는 한국어만, Pretendard 폰트 적용
+* MVP에서는 관리자 기능 제외
+
+---
+
+## Constraints
+
+* 의존성: `flutter_riverpod`, `go_router`, `freezed`, `firebase_auth`, `cloud_firestore`, `firebase_functions`, `firebase_messaging`, `kakao_flutter_sdk_user`, `uuid`, `intl`
+* App Check 활성화
+* Functions IP rate limit 10/min
+* AsyncValueWidget 패턴 강제
+* 로컬테스트 Firebase Emulator 허용
+
+---
+
+## Deliver
+
+**변경파일 목록**
+
+```
+lib/
+  app/{app.dart,router.dart,theme.dart,di.dart}
+  core/{constants,utils,errors}
+  data/{models,sources,repositories}
+  features/
+    auth/
+    onboarding/
+    match/
+    chat/
+    profile/
+  widgets/
+```
+
+---
+
+## 1. User Flow
+
+```
+카카오 로그인 → 전화번호 인증 → 온보딩(닉네임·지역2개·NTRP·동의)
+ ↓
+홈(추천 매칭) → 매칭 등록 or 탐색
+ ↓
+신청 → 호스트 승인/거절 → 채팅 자동 생성
+ ↓
+매칭 종료 → 리뷰(내부저장) → 내정보 확인
+```
+
+---
+
+## 2. Screens Overview
+
+| 탭   | 화면         | 주요 기능                    |
+| --- | ---------- | ------------------------ |
+| 홈   | 오늘의 매칭 추천  | FAB(+)로 등록 진입, 근거리+시간 중심 |
+| 매칭  | 필터+리스트 탐색  | 소프트 필터, fallback 매칭 노출   |
+| 채팅  | 매칭 확정 그룹채팅 | 메시지, 이미지, 알림             |
+| 내정보 | 프로필·신청·이력  | 통계, 알림설정, 로그아웃           |
+
+---
+
+## 3. Auth & Onboarding
+
+| 항목     | 내용                                       |
+| ------ | ---------------------------------------- |
+| 로그인    | 카카오 SDK → Firebase CustomToken           |
+| 인증     | 전화번호(Firebase Auth)                      |
+| 온보딩 입력 | 닉네임, 지역(집/직장), NTRP, 동의                  |
+| 매너온도   | 내부 저장 (기본 36.5, 비표시)                     |
+| 저장     | `/users/{uid}`, `/profiles_public/{uid}` |
+
+---
+
+## 4. Match Core Logic
+
+| 항목      | 내용                                           |
+| ------- | -------------------------------------------- |
+| 등록 필드   | 날짜, 시간, 위치, 유형, 인원, NTRP범위, 시설(주차/공/물/라켓/기타) |
+| 신청 제한   | 확정되지 않은 신청 최대 3개                             |
+| 중복 신청   | 대기 상태만 가능, 확정 시 자동취소                         |
+| 호스트 기능  | 신청자 보기 / 수락 / 거부 / 대기자 1명                    |
+| 자동 로직   | 승인 → 채팅 생성 / 확정 → 타 대기 자동취소 / 취소 → 대기자 승격    |
+| 트랜잭션 처리 | Firestore batch or runTransaction 사용         |
+
+---
+
+## 5. Filtering & Fallback Logic
+
+| 단계  | 완화 기준                | 설명       |
+| --- | -------------------- | -------- |
+| 1단계 | 거리 +5km / 시간겹침 15분   | 근거리 동일시간 |
+| 2단계 | 거리 +10km / NTRP ±0.8 | 거리·실력 완화 |
+| 3단계 | 거리 +15km / 동일요일      | 익일 대체 추천 |
+
+정렬식:
+`score = 0.5*distance + 0.3*timeOverlap + 0.2*ntrpDiff`
+
+---
+
+## 6. Chat Logic
+
+| 항목  | 내용                                        |
+| --- | ----------------------------------------- |
+| 생성  | 매칭 확정 시 자동 `/chats/{matchId}`             |
+| 구성  | 호스트 + 승인참가자                               |
+| 메시지 | 텍스트, 이미지(2MB 이하)                          |
+| 상태  | active → ended → readonly(24h) → archived |
+| 알림  | `chat-{matchId}` topic 기반                 |
+| 정리  | 30일 후 자동삭제 (Functions)                    |
+
+---
+
+## 7. Notifications (FCM)
+
+| 대상  | 이벤트                 | 알림 내용              |
+| --- | ------------------- | ------------------ |
+| 호스트 | 참가신청 / 취소 / 채팅      | "새 신청이 도착했습니다."    |
+| 신청자 | 승인 / 거부 / 자동취소 / 채팅 | "매칭이 확정되었습니다."     |
+| 전체  | 임박알림                | "2시간 후 매칭이 시작됩니다." |
+
+* FCM topic: `chat-{matchId}`
+* 딥링크: `/match/{id}`, `/chat/{id}`
+* 사용자 설정: `/users/{uid}/preferences.notifications`
+
+---
+
+## 8. My Info
+
+| 항목   | 내용                                           |
+| ---- | -------------------------------------------- |
+| 프로필  | 이름·이메일·휴대폰(읽기전용), 닉네임, 지역(집·직장), NTRP        |
+| 신청내역 | requested / waitlisted / approved / rejected |
+| 매칭이력 | 최근 10건 (진행/완료)                               |
+| 통계   | 매칭 수, 완료율, 리뷰율                               |
+| 설정   | 알림 토글(매칭·채팅·시스템), 로그아웃, 탈퇴                   |
+
+---
+
+## 9. Firestore Schema
+
+```
+users/{uid}{
+  name,email,phone,nickname,
+  region:{home,work},ntrp,
+  manner:{score:36.5,hidden:true},
+  fcmTokens[],
+  preferences:{notifications:{match:true,chat:true,system:true}},
+  createdAt
+}
+
+matches/{matchId}{
+  hostId,users:[uid],waitlist:[uid],
+  region,geohashPrefix,
+  time:{start,end},
+  ntrpRange:[min,max],
+  facilities:{parking,balls,water,racket,etc},
+  state:"open|matched|completed",
+  createdAt
+}
+
+requests/{reqId}{
+  matchId,applicantId,status, rejectCode?, createdAt
+}
+
+chats/{matchId}/messages/{msgId}{
+  senderId,text?,imageUrl?,createdAt
+}
+
+users_private/{uid}/inbox/{notifId}{
+  type,title,body,route,createdAt,read:false
+}
+```
+
+---
+
+## 10. Functions (Cloud)
+
+| 함수                      | 기능                     |
+| ----------------------- | ---------------------- |
+| `onRequestCreate`       | 호스트에게 신청 알림            |
+| `approveRequestTx`      | 승인 트랜잭션 (대기자 처리 포함)    |
+| `autoCancelConflictsTx` | 중복신청 자동 취소             |
+| `promoteWaitlistTx`     | 대기자 자동 승격              |
+| `onChatMessage`         | 채팅 푸시                  |
+| `onMatchReminder`       | 경기 2시간 전 알림            |
+| `cleanupHistory`        | 매칭 10건 유지, 채팅 30일 후 삭제 |
+
+---
+
+## 11. Rules (요약)
+
+```
+match /users/{uid}{
+  allow read,write: if request.auth.uid==uid;
+}
+
+match /matches/{id}{
+  allow read: if true;
+  allow write: if request.auth.uid==resource.data.hostId;
+}
+
+match /requests/{id}{
+  allow create: if request.auth.uid==request.resource.data.applicantId;
+  allow read: if request.auth.uid in [resource.data.applicantId, get(/databases/$(database)/documents/matches/$(resource.data.matchId)).data.hostId];
+}
+
+match /chats/{id}{
+  allow read,write: if request.auth.uid in resource.data.members && resource.data.state=="active";
+}
+```
+
+---
+
+## 12. Performance & Test
+
+| 항목           | 목표                                |
+| ------------ | --------------------------------- |
+| 첫 렌더링        | < 2.0s                            |
+| 크래시프리율       | ≥ 99%                             |
+| Firestore 지연 | < 300ms                           |
+| 동시성 실패       | 0건                                |
+| 테스트          | 승인/승격/취소 트랜잭션 / 인덱스 검증 / 알림 수신 확인 |
+
+---
+
+## 13. MVP 완료 조건
+
+* 로그인–온보딩–탐색–신청–승인–채팅–알림 전체 플로우 정상 작동
+* Fallback 매칭 알고리즘 3단계 작동
+* Firestore 인덱스 및 트랜잭션 검증 완료
+* Functions 및 Rules 테스트 통과
+
+---
+
+## 14. KPI
+
+| 항목             | 목표     |
+| -------------- | ------ |
+| 첫 매칭 확정까지 평균시간 | ≤ 24시간 |
+| 신청→확정 전환율      | ≥ 30%  |
+| 리뷰 작성률         | ≥ 70%  |
+| 7일 재방문율        | ≥ 50%  |
+
+---
+
