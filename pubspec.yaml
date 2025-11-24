@@ -9,6 +9,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
   
   # State Management
   flutter_riverpod: ^2.4.9
@@ -18,13 +20,13 @@ dependencies:
   go_router: ^13.0.0
   
   # Firebase
-  firebase_core: any
-  firebase_auth: any
-  cloud_firestore: any
+  firebase_core: ^4.2.1
+  firebase_auth: ^6.1.2
+  cloud_firestore: ^6.1.0
   # firebase_functions: ^0.0.1-dev  # Discontinued - 다른 방법 필요
-  firebase_messaging: any
-  firebase_app_check: any
-  firebase_storage: any
+  firebase_messaging: ^16.0.4
+  firebase_app_check: ^0.4.1
+  firebase_storage: ^13.0.4
   
   # Kakao Login
   kakao_flutter_sdk_user: ^1.4.0
@@ -35,7 +37,7 @@ dependencies:
   
   # Utilities
   uuid: ^4.2.1
-  intl: ^0.19.0
+  intl: ^0.20.2
   image_picker: ^1.0.7
   
   # UI

@@ -1,5 +1,4 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import '../../core/errors/app_exceptions.dart';
 import '../models/request_model.dart';
 
@@ -57,26 +56,67 @@ class FirestoreSource {
         query = query.where('region', isEqualTo: region);
       }
 
-      if (startAfter != null) {
-        query = query.where('time.start', isGreaterThan: startAfter);
-      }
+      // 시간 기준 정렬 - createdAt으로 정렬 (인덱스 문제 방지)
+      // time.start는 중첩 필드라 인덱스가 필요하므로 createdAt 사용
+      query = query.orderBy('createdAt', descending: true);
+      
+      // limit 기본값 설정 (성능 및 비용 최적화)
+      // 기본값 20으로 설정하여 대량 데이터 조회 방지
+      final queryLimit = limit ?? 20;
+      query = query.limit(queryLimit);
+      
+      // startAfter는 페이지네이션을 위해 사용되지만,
+      // 현재는 createdAt 기준이므로 startAfter 파라미터는 향후 개선 예정
+      // TODO: startAfter를 DocumentSnapshot으로 변경하여 페이지네이션 구현
 
-      if (limit != null) {
-        query = query.limit(limit);
-      }
-
-      return query.snapshots().map((snapshot) => snapshot.docs);
+      return query.snapshots().map((snapshot) => snapshot.docs).handleError((error) {
+        print('Firestore 스트림 오류: $error');
+        // 에러 발생 시 빈 리스트 반환
+        return <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+      });
     } catch (e) {
-      throw FirestoreException('매칭 목록을 가져오는데 실패했습니다: $e');
+      print('매칭 목록 조회 오류: $e');
+      // 에러 발생 시 빈 스트림 반환
+      return Stream.value(<QueryDocumentSnapshot<Map<String, dynamic>>>[]);
     }
   }
 
-  /// 매칭 생성
-  Future<String> createMatch(Map<String, dynamic> data) async {
+  /// 매칭 생성 (커스텀 ID 사용)
+  Future<String> createMatch(String matchId, Map<String, dynamic> data) async {
     try {
-      final docRef = await _firestore.collection('matches').add(data);
-      return docRef.id;
-    } catch (e) {
+      print('Firestore에 매칭 저장 시도: matchId=$matchId');
+      print('저장할 데이터 타입 확인:');
+      data.forEach((key, value) {
+        print('  $key: ${value.runtimeType}');
+      });
+      
+      // 타임아웃 설정 (30초)
+      print('Firestore set() 호출 시작...');
+      await _firestore.collection('matches').doc(matchId).set(data)
+          .timeout(
+            const Duration(seconds: 30),
+            onTimeout: () {
+              print('Firestore 저장 타임아웃 발생!');
+              throw FirestoreException('Firestore 저장 타임아웃: 30초 내에 응답이 없습니다. Firestore 규칙을 확인하거나 네트워크를 확인해주세요.');
+            },
+          );
+      
+      print('Firestore에 매칭 저장 성공: matchId=$matchId');
+      return matchId;
+    } catch (e, stackTrace) {
+      print('Firestore 매칭 생성 실패: $e');
+      print('스택 트레이스: $stackTrace');
+      
+      // 권한 오류인지 확인
+      if (e.toString().contains('permission') || e.toString().contains('PERMISSION_DENIED')) {
+        throw FirestoreException('Firestore 권한 오류: Firestore 규칙을 확인하거나 배포해주세요. $e');
+      }
+      
+      // 타임아웃 오류
+      if (e is FirestoreException) {
+        rethrow;
+      }
+      
       throw FirestoreException('매칭을 생성하는데 실패했습니다: $e');
     }
   }
@@ -90,11 +130,11 @@ class FirestoreSource {
     }
   }
 
-  /// 신청 생성
-  Future<String> createRequest(Map<String, dynamic> data) async {
+  /// 신청 생성 (커스텀 ID 사용)
+  Future<String> createRequest(String reqId, Map<String, dynamic> data) async {
     try {
-      final docRef = await _firestore.collection('requests').add(data);
-      return docRef.id;
+      await _firestore.collection('requests').doc(reqId).set(data);
+      return reqId;
     } catch (e) {
       throw FirestoreException('신청을 생성하는데 실패했습니다: $e');
     }

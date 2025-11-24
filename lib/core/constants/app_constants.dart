@@ -5,6 +5,7 @@ class AppConstants {
   // 매칭 관련
   static const int maxPendingRequests = 3;
   static const int maxMatchHistory = 10;
+  static const int maxMatchCapacity = 4; // 매칭 최대 참가자 수
   
   // 채팅 관련
   static const int maxImageSizeMB = 2;

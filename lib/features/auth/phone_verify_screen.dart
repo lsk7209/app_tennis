@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'providers/auth_service_providers.dart';
-import 'services/phone_auth_service.dart';
-import '../../../core/errors/app_exceptions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../../../core/utils/format_utils.dart';
 
 /// 전화번호 인증 화면
 class PhoneVerifyScreen extends ConsumerStatefulWidget {
@@ -15,137 +14,55 @@ class PhoneVerifyScreen extends ConsumerStatefulWidget {
 }
 
 class _PhoneVerifyScreenState extends ConsumerState<PhoneVerifyScreen> {
-  final _phoneController = TextEditingController();
-  final _codeController = TextEditingController();
-  bool _isCodeSent = false;
+  final _nameController = TextEditingController(text: '김테니');
+  final _emailController = TextEditingController(text: 'tennis_friend@kakao.com');
+  final _phoneController = TextEditingController(text: '010-1234-5678');
   bool _isLoading = false;
-  String? _errorMessage;
-  int _countdown = 0;
 
   @override
   void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
     _phoneController.dispose();
-    _codeController.dispose();
     super.dispose();
   }
 
-  Future<void> _sendCode() async {
-    final phone = _phoneController.text.trim();
-    if (phone.isEmpty) {
-      setState(() {
-        _errorMessage = '전화번호를 입력해주세요';
-      });
-      return;
-    }
-
+  Future<void> _handleNext() async {
     setState(() {
       _isLoading = true;
-      _errorMessage = null;
     });
 
     try {
-      final phoneAuth = ref.read(phoneAuthServiceProvider);
-      await phoneAuth.sendVerificationCode(phone);
+      // 개발 단계: 정보 확인 없이 익명 인증으로 로그인 후 온보딩 화면으로 이동
+      await Future.delayed(const Duration(milliseconds: 300));
       
-      setState(() {
-        _isCodeSent = true;
-        _countdown = 60;
-      });
-
-      // 카운트다운 시작
-      _startCountdown();
-    } on AppException catch (e) {
-      setState(() {
-        _errorMessage = e.message;
-      });
-    } catch (e) {
-      setState(() {
-        _errorMessage = '인증 코드 전송에 실패했습니다: $e';
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+      // 개발 단계: 익명 인증으로 임시 사용자 생성
+      try {
+        final userCredential = await FirebaseAuth.instance.signInAnonymously();
+        if (userCredential.user != null) {
+          // 온보딩 화면으로 이동
+          if (mounted) {
+            context.pushReplacement('/onboarding');
+            return;
+          }
+        }
+      } catch (e) {
+        // 익명 인증 실패 시에도 온보딩으로 이동 (개발 단계)
+        if (mounted) {
+          context.pushReplacement('/onboarding');
+          return;
+        }
       }
-    }
-  }
-
-  void _startCountdown() {
-    Future.doWhile(() async {
-      await Future.delayed(const Duration(seconds: 1));
-      if (mounted && _countdown > 0) {
-        setState(() {
-          _countdown--;
-        });
-        return _countdown > 0;
-      }
-      return false;
-    });
-  }
-
-  Future<void> _verifyCode() async {
-    final code = _codeController.text.trim();
-    if (code.isEmpty) {
-      setState(() {
-        _errorMessage = '인증 코드를 입력해주세요';
-      });
-      return;
-    }
-
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
-
-    try {
-      final phoneAuth = ref.read(phoneAuthServiceProvider);
-      await phoneAuth.verifyCode(code);
       
-      // 인증 성공 후 온보딩으로
+      // 익명 인증이 완료되지 않았어도 온보딩으로 이동 (개발 단계)
       if (mounted) {
         context.pushReplacement('/onboarding');
       }
-    } on AppException catch (e) {
-      setState(() {
-        _errorMessage = e.message;
-      });
     } catch (e) {
-      setState(() {
-        _errorMessage = '인증에 실패했습니다: $e';
-      });
-    } finally {
+      // 개발 단계: 에러가 발생해도 온보딩으로 이동
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+        context.pushReplacement('/onboarding');
       }
-    }
-  }
-
-  Future<void> _resendCode() async {
-    if (_countdown > 0) return;
-
-    final phone = _phoneController.text.trim();
-    if (phone.isEmpty) return;
-
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
-
-    try {
-      final phoneAuth = ref.read(phoneAuthServiceProvider);
-      await phoneAuth.resendCode(phone);
-      
-      setState(() {
-        _countdown = 60;
-      });
-      _startCountdown();
-    } catch (e) {
-      setState(() {
-        _errorMessage = '재전송에 실패했습니다: $e';
-      });
     } finally {
       if (mounted) {
         setState(() {
@@ -157,108 +74,296 @@ class _PhoneVerifyScreenState extends ConsumerState<PhoneVerifyScreen> {
 
   @override
   Widget build(BuildContext context) {
+    const backgroundColor = Color(0xFFFDFDFD);
+    const primaryGreen = Color(0xFF6A994E);
+    const textMain = Color(0xFF333333);
+    const textSecondary = Color(0xFFCCCCCC);
+    const borderLight = Color(0xFFE0E0E0);
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('전화번호 인증'),
-      ),
+      backgroundColor: backgroundColor,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                '전화번호를 인증해주세요',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                '안전한 매칭을 위해 본인인증이 필요합니다',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey,
-                ),
-              ),
-              const SizedBox(height: 32),
-              if (_errorMessage != null)
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: Colors.red.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.red.shade200),
-                  ),
-                  child: Text(
-                    _errorMessage!,
-                    style: TextStyle(color: Colors.red.shade700),
-                  ),
-                ),
-              TextField(
-                controller: _phoneController,
-                enabled: !_isCodeSent,
-                decoration: const InputDecoration(
-                  labelText: '전화번호',
-                  hintText: '010-1234-5678',
-                  prefixIcon: Icon(Icons.phone),
-                ),
-                keyboardType: TextInputType.phone,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                ],
-              ),
-              if (_isCodeSent) ...[
-                const SizedBox(height: 24),
-                TextField(
-                  controller: _codeController,
-                  decoration: const InputDecoration(
-                    labelText: '인증 코드',
-                    hintText: '6자리 코드',
-                    prefixIcon: Icon(Icons.lock),
-                  ),
-                  keyboardType: TextInputType.number,
-                  maxLength: 6,
-                  inputFormatters: [
-                    FilteringTextInputFormatter.digitsOnly,
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
+        child: Column(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (_countdown > 0)
-                      Text(
-                        '${_countdown}초 후 재전송 가능',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey,
+                    const SizedBox(height: 32),
+                    // 진행 표시기 (4단계 중 2단계)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: textSecondary,
+                          ),
                         ),
-                      )
-                    else
-                      TextButton(
-                        onPressed: _isLoading ? null : _resendCode,
-                        child: const Text('인증 코드 재전송'),
+                        const SizedBox(width: 12),
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: primaryGreen,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: textSecondary,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    // 헤드라인
+                    const Text(
+                      '회원 정보 확인',
+                      style: TextStyle(
+                        fontSize: 30,
+                        fontWeight: FontWeight.bold,
+                        color: textMain,
+                        height: 1.2,
+                        letterSpacing: -0.015,
                       ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '카카오 계정의 정보가 정확한지 확인하고, 필요하다면 수정해주세요.',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Color.fromRGBO(
+                          textMain.red,
+                          textMain.green,
+                          textMain.blue,
+                          0.8,
+                        ),
+                        height: 1.5,
+                      ),
+                    ),
+                    const SizedBox(height: 40),
+                    // 입력 필드들
+                    Column(
+                      children: [
+                        // 이름
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              '이름',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: textMain,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            TextFormField(
+                              controller: _nameController,
+                              decoration: InputDecoration(
+                                filled: true,
+                                fillColor: backgroundColor,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(color: borderLight),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(color: borderLight),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(color: primaryGreen, width: 2),
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 14,
+                                ),
+                              ),
+                              style: const TextStyle(
+                                fontSize: 16,
+                                color: textMain,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
+                        // 이메일
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              '이메일',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: textMain,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            TextFormField(
+                              controller: _emailController,
+                              keyboardType: TextInputType.emailAddress,
+                              decoration: InputDecoration(
+                                filled: true,
+                                fillColor: backgroundColor,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(color: borderLight),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(color: borderLight),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(color: primaryGreen, width: 2),
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 14,
+                                ),
+                              ),
+                              style: const TextStyle(
+                                fontSize: 16,
+                                color: textMain,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
+                        // 휴대폰 번호
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              '휴대폰 번호',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: textMain,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            TextFormField(
+                              controller: _phoneController,
+                              keyboardType: TextInputType.phone,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                                LengthLimitingTextInputFormatter(11),
+                                // 전화번호 포맷팅 (010-1234-5678)
+                                TextInputFormatter.withFunction((oldValue, newValue) {
+                                  final text = newValue.text;
+                                  if (text.isEmpty) return newValue;
+                                  
+                                  final formatted = FormatUtils.formatPhoneNumber(text);
+                                  return TextEditingValue(
+                                    text: formatted,
+                                    selection: TextSelection.collapsed(offset: formatted.length),
+                                  );
+                                }),
+                              ],
+                              decoration: InputDecoration(
+                                filled: true,
+                                fillColor: backgroundColor,
+                                hintText: '010-1234-5678',
+                                hintStyle: const TextStyle(color: textSecondary),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(color: borderLight),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(color: borderLight),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(color: primaryGreen, width: 2),
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 14,
+                                ),
+                              ),
+                              style: const TextStyle(
+                                fontSize: 16,
+                                color: textMain,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 100), // 하단 버튼 공간
                   ],
                 ),
-              ],
-              const Spacer(),
-              ElevatedButton(
-                onPressed: _isLoading
-                    ? null
-                    : (_isCodeSent ? _verifyCode : _sendCode),
-                child: Text(_isLoading
-                    ? '처리 중...'
-                    : (_isCodeSent ? '인증 완료' : '인증 코드 전송')),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+            ),
+            // 하단 고정 버튼
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: backgroundColor,
+                border: Border(
+                  top: BorderSide(
+                    color: Color.fromRGBO(
+                      borderLight.red,
+                      borderLight.green,
+                      borderLight.blue,
+                      0.5,
+                    ),
+                    width: 1,
+                  ),
                 ),
               ),
-            ],
-          ),
+              child: SafeArea(
+                child: ElevatedButton(
+                  onPressed: _isLoading ? null : _handleNext,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryGreen,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 18),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        '다음',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      Icon(Icons.arrow_forward, size: 20),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

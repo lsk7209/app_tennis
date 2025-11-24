@@ -14,12 +14,8 @@ class KakaoAuthService {
   Future<UserCredential> signInWithKakao() async {
     try {
       // 카카오 로그인
-      kakao.OAuthToken token = await kakao.UserApi.instance.loginWithKakaoTalk();
+      await kakao.UserApi.instance.loginWithKakaoTalk();
       
-      if (token.accessToken == null) {
-        throw AuthException('카카오 로그인에 실패했습니다');
-      }
-
       // 카카오 사용자 정보 가져오기
       kakao.User user = await kakao.UserApi.instance.me();
       

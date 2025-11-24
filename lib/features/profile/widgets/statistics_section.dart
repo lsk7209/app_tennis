@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../data/models/match_model.dart';
-import '../../../data/models/request_model.dart';
 import '../../../data/repositories/match_repository.dart';
-import '../../../data/repositories/request_repository.dart';
 import '../../../features/auth/providers/auth_providers.dart';
 
 /// 통계 섹션
@@ -85,19 +83,12 @@ class StatisticsSection extends ConsumerWidget {
     String userId,
   ) async {
     final matchRepo = ref.read(matchRepositoryProvider);
-    final requestRepo = ref.read(requestRepositoryProvider);
 
     // 사용자가 참가한 매칭 조회
     final allMatches = await matchRepo.getMatches(limit: 100).first;
     final userMatches = allMatches
         .where((match) =>
             match.hostId == userId || match.users.contains(userId))
-        .toList();
-
-    // 사용자의 신청 내역 조회
-    final requests = await requestRepo.getUserRequests().first;
-    final approvedRequests = requests
-        .where((req) => req.status == RequestStatus.approved)
         .toList();
 
     final totalMatches = userMatches.length;

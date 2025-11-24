@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../../data/models/match_model.dart';
 import '../../../data/models/request_model.dart';
+import '../../../data/models/user_model.dart';
 import '../../../data/repositories/match_repository.dart';
 import '../../../data/repositories/request_repository.dart';
-import '../../../core/utils/date_utils.dart' as app_date;
-import '../../../core/utils/async_value_widget.dart';
+import '../../../data/repositories/user_repository.dart';
 import '../../../core/errors/app_exceptions.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import '../widgets/host_request_manager.dart';
-import '../widgets/match_complete_dialog.dart';
-import '../widgets/participant_list.dart';
+import '../../../core/constants/app_constants.dart';
+import '../../../app/theme.dart';
+import '../widgets/match_request_dialog.dart';
 
 /// 매칭 상세 화면
 class MatchDetailScreen extends ConsumerStatefulWidget {
@@ -30,69 +30,73 @@ class _MatchDetailScreenState extends ConsumerState<MatchDetailScreen> {
   bool _isLoading = false;
 
   Future<void> _handleRequest() async {
-    setState(() {
-      _isLoading = true;
-    });
+    // 매칭 신청 다이얼로그 표시
+    await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => MatchRequestDialog(
+        onSubmit: (intro) async {
+          setState(() {
+            _isLoading = true;
+          });
 
-    try {
-      final requestRepo = ref.read(requestRepositoryProvider);
-      await requestRepo.createRequest(widget.matchId);
+          try {
+            final requestRepo = ref.read(requestRepositoryProvider);
+            await requestRepo.createRequest(widget.matchId);
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('신청이 완료되었습니다')),
-        );
-        setState(() {});
-      }
-    } on AppException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message)),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('신청에 실패했습니다: $e')),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('신청이 완료되었습니다')),
+              );
+              setState(() {});
+            }
+          } on AppException catch (e) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(e.message)),
+              );
+            }
+          } catch (e) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('신청에 실패했습니다: $e')),
+              );
+            }
+          } finally {
+            if (mounted) {
+              setState(() {
+                _isLoading = false;
+              });
+            }
+          }
+        },
+      ),
+    );
   }
 
-  Future<void> _handleCancelRequest(String reqId) async {
-    try {
-      final requestRepo = ref.read(requestRepositoryProvider);
-      await requestRepo.cancelRequest(reqId);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('신청이 취소되었습니다')),
-        );
-        setState(() {});
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('취소에 실패했습니다: $e')),
-        );
-      }
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
     final matchRepo = ref.watch(matchRepositoryProvider);
     final matchFuture = matchRepo.getMatch(widget.matchId);
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     return Scaffold(
+      backgroundColor: colorScheme.background,
       appBar: AppBar(
-        title: const Text('매칭 상세'),
+        backgroundColor: theme.appBarTheme.backgroundColor,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back, color: colorScheme.onBackground),
+          onPressed: () => context.pop(),
+        ),
+        title: Text(
+          '매치 정보',
+          style: theme.appBarTheme.titleTextStyle,
+        ),
+        centerTitle: true,
       ),
       body: FutureBuilder<MatchModel?>(
         future: matchFuture,
@@ -106,157 +110,305 @@ class _MatchDetailScreenState extends ConsumerState<MatchDetailScreen> {
           }
 
           final match = snapshot.data!;
-          final currentUserId = FirebaseAuth.instance.currentUser?.uid;
-          final isHost = match.hostId == currentUserId;
+          final totalParticipants = match.users.length;
+          final maxCapacity = AppConstants.maxMatchCapacity;
 
           return SingleChildScrollView(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.all(16),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  match.region,
-                  style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
+                // 매칭 정보 카드
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: colorScheme.surface,
+                    borderRadius: BorderRadius.circular(DesignTokens.borderRadius16),
+                    border: Border.all(color: colorScheme.primary, width: 1),
                   ),
-                ),
-                const SizedBox(height: 16),
-                _DetailRow(
-                  icon: Icons.access_time,
-                  label: '시간',
-                  value: '${app_date.AppDateUtils.formatDateTime(match.time.start)} ~ ${app_date.AppDateUtils.formatTime(match.time.end)}',
-                ),
-                const SizedBox(height: 16),
-                // 참가자 목록
-                ParticipantList(
-                  match: match,
-                  currentUserId: currentUserId,
-                ),
-                const SizedBox(height: 16),
-                _DetailRow(
-                  icon: Icons.sports_tennis,
-                  label: 'NTRP 범위',
-                  value: '${match.ntrpRange.min.toStringAsFixed(1)} ~ ${match.ntrpRange.max.toStringAsFixed(1)}',
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  '시설',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  children: [
-                    if (match.facilities.parking)
-                      Chip(label: const Text('주차 가능')),
-                    if (match.facilities.balls)
-                      Chip(label: const Text('공 제공')),
-                    if (match.facilities.water)
-                      Chip(label: const Text('물 제공')),
-                    if (match.facilities.racket)
-                      Chip(label: const Text('라켓 대여')),
-                    if (match.facilities.etc)
-                      Chip(label: const Text('기타')),
-                  ],
-                ),
-                const SizedBox(height: 32),
-                // 매칭 확정 시 채팅 버튼 표시
-                if (match.state == MatchState.matched &&
-                    (isHost || match.users.contains(currentUserId))) ...[
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      context.push('/chat/${widget.matchId}');
-                    },
-                    icon: const Icon(Icons.chat_bubble),
-                    label: const Text('채팅하기'),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      minimumSize: const Size(double.infinity, 48),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  // 호스트만 매칭 완료 처리 가능
-                  if (isHost)
-                    OutlinedButton.icon(
-                      onPressed: () {
-                        showDialog(
-                          context: context,
-                          builder: (context) => MatchCompleteDialog(match: match),
-                        );
-                      },
-                      icon: const Icon(Icons.check_circle),
-                      label: const Text('매칭 완료'),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        minimumSize: const Size(double.infinity, 48),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // 매칭 제목 및 시간
+                      Text(
+                        match.region,
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: colorScheme.onBackground,
+                          height: 1.2,
+                        ),
                       ),
-                    ),
-                  const SizedBox(height: 16),
-                ],
-                if (isHost) ...[
-                  HostRequestManager(matchId: widget.matchId),
-                  const SizedBox(height: 16),
-                ],
-                if (!isHost && currentUserId != null) ...[
-                  FutureBuilder<RequestModel?>(
-                    future: ref.read(requestRepositoryProvider).getRequestByMatchAndUser(
-                      widget.matchId,
-                      currentUserId,
-                    ),
-                    builder: (context, snapshot) {
-                      final request = snapshot.data;
-                      final hasRequest = request != null &&
-                          request.status != RequestStatus.cancelled &&
-                          request.status != RequestStatus.rejected;
-
-                      if (hasRequest) {
-                        return Column(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: _getStatusColor(request!.status).withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      const SizedBox(height: 8),
+                      Text(
+                        _formatDateTimeRange(match.time.start, match.time.end),
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const Divider(height: 32),
+                      
+                      // 호스트 섹션
+                      Text(
+                        '호스트',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: colorScheme.onBackground,
+                          letterSpacing: -0.015,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      FutureBuilder<UserModel?>(
+                        future: ref.read(userRepositoryProvider).getUser(match.hostId),
+                        builder: (context, hostSnapshot) {
+                          final host = hostSnapshot.data;
+                          return Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
                                 children: [
-                                  Text(
-                                    '신청 상태: ${_getStatusText(request.status)}',
-                                    style: TextStyle(
-                                      color: _getStatusColor(request.status),
-                                      fontWeight: FontWeight.bold,
+                                  Container(
+                                    width: 56,
+                                    height: 56,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: Colors.grey.shade300,
+                                    ),
+                                    child: const Icon(
+                                      Icons.person,
+                                      size: 32,
+                                      color: Colors.grey,
                                     ),
                                   ),
-                                  if (request.status == RequestStatus.requested ||
-                                      request.status == RequestStatus.waitlisted)
-                                    TextButton(
-                                      onPressed: () => _handleCancelRequest(request.reqId),
-                                      child: const Text('취소'),
-                                    ),
+                                  const SizedBox(width: 16),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        host?.nickname ?? '호스트',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w500,
+                                          color: colorScheme.onBackground,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        host != null
+                                            ? 'NTRP ${host.ntrp.toStringAsFixed(1)}'
+                                            : 'NTRP -',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          color: colorScheme.onSurfaceVariant,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ],
                               ),
+                              if (host != null && host.manner.score >= 36.5)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: colorScheme.primaryContainer,
+                                    borderRadius: BorderRadius.circular(9999),
+                                  ),
+                                  child: Text(
+                                    '매너 호스트',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: colorScheme.primary,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          );
+                        },
+                      ),
+                      const Divider(height: 32),
+                      
+                      // 참가자 목록
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            '참가자',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: colorScheme.onBackground,
+                              letterSpacing: -0.015,
                             ),
-                          ],
-                        );
-                      }
-
-                      return ElevatedButton(
-                        onPressed: _isLoading ? null : _handleRequest,
-                        child: Text(_isLoading ? '신청 중...' : '신청하기'),
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          minimumSize: const Size(double.infinity, 48),
+                          ),
+                          Text(
+                            '$totalParticipants/$maxCapacity명',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: colorScheme.onBackground,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      // 참가자 목록 (호스트 제외)
+                      FutureBuilder<List<UserModel>>(
+                        future: _loadParticipants(match.users, match.hostId, ref),
+                        builder: (context, participantsSnapshot) {
+                          if (participantsSnapshot.connectionState == ConnectionState.waiting) {
+                            return const SizedBox(
+                              height: 48,
+                              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                            );
+                          }
+                          
+                          final participants = participantsSnapshot.data ?? [];
+                          if (participants.isEmpty) {
+                            return Text(
+                              '아직 참가자가 없습니다',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                            );
+                          }
+                          
+                          return Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: participants.map((user) {
+                              return Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: colorScheme.surfaceVariant,
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      width: 32,
+                                      height: 32,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: Colors.grey.shade300,
+                                      ),
+                                      child: const Icon(
+                                        Icons.person,
+                                        size: 18,
+                                        color: Colors.grey,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          user.nickname,
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w500,
+                                            color: colorScheme.onBackground,
+                                          ),
+                                        ),
+                                        Text(
+                                          'NTRP ${user.ntrp.toStringAsFixed(1)}',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: colorScheme.onSurfaceVariant,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                          );
+                        },
+                      ),
+                      const Divider(height: 32),
+                      
+                      // 편의시설
+                      Text(
+                        '편의시설',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: colorScheme.onBackground,
+                          letterSpacing: -0.015,
                         ),
-                      );
-                    },
+                      ),
+                      const SizedBox(height: 16),
+                      GridView.count(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        crossAxisCount: 4,
+                        crossAxisSpacing: 16,
+                        mainAxisSpacing: 16,
+                        childAspectRatio: 1,
+                        children: [
+                          _AmenityItem(
+                            icon: Icons.local_parking,
+                            label: '주차가능',
+                            isAvailable: match.facilities.parking,
+                          ),
+                          _AmenityItem(
+                            icon: Icons.shower,
+                            label: '샤워실',
+                            isAvailable: match.facilities.water,
+                          ),
+                          _AmenityItem(
+                            icon: Icons.lock,
+                            label: '라커룸',
+                            isAvailable: match.facilities.racket,
+                          ),
+                          _AmenityItem(
+                            icon: Icons.local_cafe,
+                            label: '음료',
+                            isAvailable: match.facilities.etc,
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                ],
+                ),
+                
+                // 하단 여백 (버튼 공간)
+                const SizedBox(height: 100),
               ],
+            ),
+          );
+        },
+      ),
+      // 하단 고정 버튼
+      bottomNavigationBar: FutureBuilder<MatchModel?>(
+        future: matchFuture,
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return const SizedBox.shrink();
+          }
+          
+          final match = snapshot.data!;
+          final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+          final isHost = match.hostId == currentUserId;
+          
+          return Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: theme.appBarTheme.backgroundColor,
+              boxShadow: DesignTokens.shadow12,
+            ),
+            child: SafeArea(
+              child: _buildBottomButton(
+                match: match,
+                currentUserId: currentUserId,
+                isHost: isHost,
+                context: context,
+              ),
             ),
           );
         },
@@ -264,67 +416,214 @@ class _MatchDetailScreenState extends ConsumerState<MatchDetailScreen> {
     );
   }
 
-  Color _getStatusColor(RequestStatus status) {
-    switch (status) {
-      case RequestStatus.requested:
-        return Colors.orange;
-      case RequestStatus.waitlisted:
-        return Colors.blue;
-      case RequestStatus.approved:
-        return Colors.green;
-      case RequestStatus.rejected:
-        return Colors.red;
-      case RequestStatus.cancelled:
-        return Colors.grey;
+  Widget _buildBottomButton({
+    required MatchModel match,
+    required String? currentUserId,
+    required bool isHost,
+    required BuildContext context,
+  }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    if (isHost) {
+      return const SizedBox.shrink(); // 호스트는 버튼 없음
     }
+
+    if (currentUserId == null) {
+      return ElevatedButton(
+        onPressed: () {
+          // 로그인 필요
+        },
+        style: theme.elevatedButtonTheme.style,
+        child: const Text(
+          '이 매칭 신청하기',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      );
+    }
+
+    return FutureBuilder<RequestModel?>(
+      future: ref.read(requestRepositoryProvider).getRequestByMatchAndUser(
+        widget.matchId,
+        currentUserId,
+      ),
+      builder: (context, snapshot) {
+        final request = snapshot.data;
+        final hasRequest = request != null &&
+            request.status != RequestStatus.cancelled &&
+            request.status != RequestStatus.rejected;
+
+        if (hasRequest) {
+          final status = request.status;
+          if (status == RequestStatus.approved) {
+            return ElevatedButton(
+              onPressed: () {
+                context.push('/chat/${widget.matchId}');
+              },
+              style: theme.elevatedButtonTheme.style,
+              child: const Text(
+                '채팅하기',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            );
+          }
+
+          return ElevatedButton(
+            onPressed: null,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: colorScheme.onSurfaceVariant,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 18),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(DesignTokens.borderRadius12),
+              ),
+              elevation: 0,
+            ),
+            child: Text(
+              status == RequestStatus.requested
+                  ? '승인 대기'
+                  : status == RequestStatus.waitlisted
+                      ? '대기중'
+                      : '신청됨',
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          );
+        }
+
+        final isFull = match.users.length >= AppConstants.maxMatchCapacity;
+        if (isFull) {
+          return ElevatedButton(
+            onPressed: null,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: colorScheme.onSurfaceVariant,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 18),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(DesignTokens.borderRadius12),
+              ),
+              elevation: 0,
+            ),
+            child: const Text(
+              '정원 마감',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          );
+        }
+
+        return ElevatedButton(
+          onPressed: _isLoading ? null : _handleRequest,
+          style: theme.elevatedButtonTheme.style,
+          child: Text(
+            _isLoading ? '신청 중...' : '이 매칭 신청하기',
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        );
+      },
+    );
   }
 
-  String _getStatusText(RequestStatus status) {
-    switch (status) {
-      case RequestStatus.requested:
-        return '신청됨';
-      case RequestStatus.waitlisted:
-        return '대기중';
-      case RequestStatus.approved:
-        return '승인됨';
-      case RequestStatus.rejected:
-        return '거부됨';
-      case RequestStatus.cancelled:
-        return '취소됨';
-    }
+  /// 참가자 목록 로드 (호스트 제외) - 병렬 처리
+  Future<List<UserModel>> _loadParticipants(
+    List<String> userIds,
+    String hostId,
+    WidgetRef ref,
+  ) async {
+    final userRepo = ref.read(userRepositoryProvider);
+    
+    // 호스트를 제외한 사용자 ID 목록
+    final participantIds = userIds.where((id) => id != hostId).toList();
+    
+    // 병렬로 모든 사용자 정보 로드
+    final userFutures = participantIds.map((userId) => userRepo.getUser(userId));
+    final users = await Future.wait(userFutures);
+    
+    // null이 아닌 사용자만 반환
+    return users.whereType<UserModel>().toList();
   }
+
+  String _formatDateTimeRange(DateTime start, DateTime end) {
+    final weekday = ['월', '화', '수', '목', '금', '토', '일'][start.weekday - 1];
+    final startHour = start.hour;
+    final startMinute = start.minute;
+    final endHour = end.hour;
+    final endMinute = end.minute;
+    
+    String startTimeStr;
+    if (startHour < 12) {
+      startTimeStr = '오전 $startHour:${startMinute.toString().padLeft(2, '0')}';
+    } else if (startHour == 12) {
+      startTimeStr = '오후 $startHour:${startMinute.toString().padLeft(2, '0')}';
+    } else {
+      startTimeStr = '오후 ${startHour - 12}:${startMinute.toString().padLeft(2, '0')}';
+    }
+    
+    String endTimeStr;
+    if (endHour < 12) {
+      endTimeStr = '오전 $endHour:${endMinute.toString().padLeft(2, '0')}';
+    } else if (endHour == 12) {
+      endTimeStr = '오후 $endHour:${endMinute.toString().padLeft(2, '0')}';
+    } else {
+      endTimeStr = '오후 ${endHour - 12}:${endMinute.toString().padLeft(2, '0')}';
+    }
+    
+    return '${start.year}년 ${start.month}월 ${start.day}일 ($weekday) $startTimeStr - $endTimeStr';
+  }
+
 }
 
-/// 상세 정보 행 위젯
-class _DetailRow extends StatelessWidget {
+/// 편의시설 아이템
+class _AmenityItem extends StatelessWidget {
   final IconData icon;
   final String label;
-  final String value;
+  final bool isAvailable;
 
-  const _DetailRow({
+  const _AmenityItem({
     required this.icon,
     required this.label,
-    required this.value,
+    required this.isAvailable,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    final colorScheme = Theme.of(context).colorScheme;
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Icon(icon, size: 20, color: Colors.grey),
-        const SizedBox(width: 8),
-        Text(
-          '$label: ',
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
+        Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceVariant,
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            icon,
+            size: 24,
+            color: colorScheme.onBackground,
           ),
         ),
-        Expanded(
-          child: Text(
-            value,
-            style: const TextStyle(fontSize: 14),
+        const SizedBox(height: 8),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: colorScheme.onSurfaceVariant,
           ),
+          textAlign: TextAlign.center,
         ),
       ],
     );

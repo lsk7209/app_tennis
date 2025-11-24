@@ -1,7 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../core/constants/app_constants.dart';
 import '../../core/errors/app_exceptions.dart';
 import '../models/user_model.dart';
 import '../sources/firestore_source.dart';
@@ -24,6 +23,17 @@ class UserRepository {
     return UserModel.fromJson({
       ...data,
       'uid': user.uid,
+    });
+  }
+
+  /// 사용자 정보 조회 (UID로)
+  Future<UserModel?> getUser(String uid) async {
+    final data = await _source.getUser(uid);
+    if (data == null) return null;
+
+    return UserModel.fromJson({
+      ...data,
+      'uid': uid,
     });
   }
 

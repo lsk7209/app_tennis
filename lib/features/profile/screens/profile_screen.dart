@@ -1,14 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import '../../../core/utils/async_value_widget.dart';
 import '../../../widgets/main_navigation.dart';
 import '../../../data/models/user_model.dart';
 import '../../../data/models/request_model.dart';
-import '../../../data/repositories/user_repository.dart';
-import '../../../features/auth/providers/auth_service_providers.dart';
-import '../../../features/auth/services/kakao_auth_service.dart';
+import '../../auth/providers/auth_service_providers.dart';
 import '../../profile/providers/profile_providers.dart';
 import '../widgets/request_list_item.dart';
 import '../widgets/statistics_section.dart';
@@ -23,10 +20,14 @@ class ProfileScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final profileAsync = ref.watch(userProfileProvider);
     final requestsAsync = ref.watch(userRequestsProvider);
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     return Scaffold(
+      backgroundColor: colorScheme.background,
       appBar: AppBar(
         title: const Text('내정보'),
+        backgroundColor: theme.appBarTheme.backgroundColor,
       ),
       bottomNavigationBar: MainNavigation(
         currentPath: GoRouterState.of(context).uri.path,
@@ -35,7 +36,45 @@ class ProfileScreen extends ConsumerWidget {
         value: profileAsync,
         data: (user) {
           if (user == null) {
-            return const Center(child: Text('사용자 정보를 불러올 수 없습니다'));
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.person_outline,
+                      size: 80,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      '사용자 정보를 불러올 수 없습니다',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: colorScheme.onBackground,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '로그인 후 다시 시도해주세요.',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    ElevatedButton(
+                      onPressed: () {
+                        context.go('/auth');
+                      },
+                      child: const Text('로그인하기'),
+                    ),
+                  ],
+                ),
+              ),
+            );
           }
 
           return SingleChildScrollView(
@@ -44,26 +83,30 @@ class ProfileScreen extends ConsumerWidget {
                 // 프로필 섹션
                 Container(
                   padding: const EdgeInsets.all(24),
-                  color: Colors.blue.shade50,
+                  color: colorScheme.primaryContainer,
                   child: Column(
                     children: [
                       CircleAvatar(
                         radius: 40,
-                        backgroundColor: Colors.blue,
+                        backgroundColor: colorScheme.primary,
                         child: Text(
-                          user.nickname.substring(0, 1).toUpperCase(),
-                          style: const TextStyle(
+                          user.nickname.isNotEmpty
+                              ? user.nickname.substring(0, 1).toUpperCase()
+                              : '?',
+                          style: TextStyle(
                             fontSize: 32,
-                            color: Colors.white,
+                            color: colorScheme.onPrimary,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        user.nickname,
-                        style: const TextStyle(
+                        user.nickname.isNotEmpty ? user.nickname : '닉네임 없음',
+                        style: TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
+                          color: colorScheme.onBackground,
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -71,7 +114,7 @@ class ProfileScreen extends ConsumerWidget {
                         'NTRP ${user.ntrp.toStringAsFixed(1)}',
                         style: TextStyle(
                           fontSize: 16,
-                          color: Colors.grey.shade700,
+                          color: colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ],
@@ -92,6 +135,50 @@ class ProfileScreen extends ConsumerWidget {
                 // 설정 섹션
                 _SettingsSection(),
               ],
+            ),
+          );
+        },
+        error: (error, stackTrace) {
+          print('프로필 로딩 오류: $error');
+          print('스택: $stackTrace');
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.error_outline,
+                    size: 80,
+                    color: colorScheme.error,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    '오류가 발생했습니다',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: colorScheme.onBackground,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    error.toString(),
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton(
+                    onPressed: () {
+                      ref.invalidate(userProfileProvider);
+                    },
+                    child: const Text('다시 시도'),
+                  ),
+                ],
+              ),
             ),
           );
         },

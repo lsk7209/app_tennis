@@ -27,7 +27,12 @@ class RequestListItem extends StatelessWidget {
             vertical: 6,
           ),
           decoration: BoxDecoration(
-            color: _getStatusColor(request.status).withOpacity(0.1),
+            color: Color.fromRGBO(
+              _getStatusColor(request.status).red,
+              _getStatusColor(request.status).green,
+              _getStatusColor(request.status).blue,
+              0.1,
+            ),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Text(

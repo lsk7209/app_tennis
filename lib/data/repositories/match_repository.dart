@@ -2,7 +2,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
-import '../../core/constants/app_constants.dart';
 import '../../core/errors/app_exceptions.dart';
 import '../models/match_model.dart';
 import '../sources/firestore_source.dart';
@@ -25,28 +24,45 @@ class MatchRepository {
     required FacilitiesModel facilities,
     String? geohashPrefix,
   }) async {
+    // 개발 단계: 로그인 없이도 등록 가능하도록 기본 사용자 ID 사용
     final user = _auth.currentUser;
+    final hostId = user?.uid ?? 'dev-user-${DateTime.now().millisecondsSinceEpoch}';
+    
     if (user == null) {
-      throw AuthException('로그인이 필요합니다');
+      print('개발 모드: 로그인 없이 매칭 등록 (hostId: $hostId)');
     }
 
     final matchId = _uuid.v4();
-    final match = MatchModel(
-      matchId: matchId,
-      hostId: user.uid,
-      region: region,
-      geohashPrefix: geohashPrefix,
-      time: TimeModel(start: startTime, end: endTime),
-      ntrpRange: NtrpRangeModel(min: ntrpMin, max: ntrpMax),
-      facilities: facilities,
-      state: MatchState.open,
-      createdAt: DateTime.now(),
-    );
+    final now = DateTime.now();
+    
+    // Firestore에 직접 저장할 수 있는 Map 생성 (DateTime 객체 직접 사용)
+    final json = <String, dynamic>{
+      'hostId': hostId,
+      'users': <String>[],
+      'waitlist': <String>[],
+      'region': region,
+      if (geohashPrefix != null) 'geohashPrefix': geohashPrefix,
+      'time': {
+        'start': startTime, // DateTime 객체 직접 사용 (Firestore가 자동 변환)
+        'end': endTime,     // DateTime 객체 직접 사용
+      },
+      'ntrpRange': {
+        'min': ntrpMin,
+        'max': ntrpMax,
+      },
+      'facilities': {
+        'parking': facilities.parking,
+        'balls': facilities.balls,
+        'water': facilities.water,
+        'racket': facilities.racket,
+        'etc': facilities.etc,
+      },
+      'state': MatchState.open.name,
+      'createdAt': now, // DateTime 객체 직접 사용
+    };
 
-    final json = match.toJson();
-    json.remove('matchId'); // 문서 ID로 사용
-
-    await _source.createMatch(json);
+    print('직렬화된 JSON (DateTime 객체 포함): $json');
+    await _source.createMatch(matchId, json);
     return matchId;
   }
 

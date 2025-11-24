@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../../core/errors/app_exceptions.dart';
+import '../../../core/utils/format_utils.dart';
 
 /// 전화번호 인증 서비스
 class PhoneAuthService {
@@ -10,10 +11,14 @@ class PhoneAuthService {
   PhoneAuthService(this._auth);
 
   /// 전화번호 인증 코드 전송
+  /// 한국 전화번호는 +82 국가 코드 추가
   Future<void> sendVerificationCode(String phoneNumber) async {
     try {
+      // 한국 국가 코드 추가 (+82)
+      final formattedPhone = FormatUtils.formatPhoneNumberForFirebase(phoneNumber);
+      
       await _auth.verifyPhoneNumber(
-        phoneNumber: phoneNumber,
+        phoneNumber: formattedPhone,
         verificationCompleted: (PhoneAuthCredential credential) {
           // 자동 인증 완료 (Android)
         },
@@ -55,10 +60,14 @@ class PhoneAuthService {
   }
 
   /// 인증 코드 재전송
+  /// 한국 전화번호는 +82 국가 코드 추가
   Future<void> resendCode(String phoneNumber) async {
     try {
+      // 한국 국가 코드 추가 (+82)
+      final formattedPhone = FormatUtils.formatPhoneNumberForFirebase(phoneNumber);
+      
       await _auth.verifyPhoneNumber(
-        phoneNumber: phoneNumber,
+        phoneNumber: formattedPhone,
         forceResendingToken: _resendToken,
         verificationCompleted: (PhoneAuthCredential credential) {},
         verificationFailed: (FirebaseAuthException e) {

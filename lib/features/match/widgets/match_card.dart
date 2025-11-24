@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../data/models/match_model.dart';
-import '../../../core/utils/date_utils.dart' as app_date;
+import '../../../core/constants/app_constants.dart';
 
 /// 매칭 카드 위젯
 class MatchCard extends StatelessWidget {
@@ -15,106 +15,108 @@ class MatchCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+    const backgroundColor = Color(0xFFF8F8F5);
+    const textMain = Color(0xFF292524); // stone-800
+    const textSecondary = Color(0xFF78716C); // stone-500
+    const textTertiary = Color(0xFF57534E); // stone-600
+
+    // 모집 인원 계산
+    final totalCapacity = match.users.length + (match.waitlist.length);
+    final maxCapacity = AppConstants.maxMatchCapacity;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: const Color.fromRGBO(0, 0, 0, 0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
       child: InkWell(
         onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: const EdgeInsets.all(16.0),
-          child: Column(
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Text(
-                      match.region,
+              // 왼쪽: 텍스트 정보
+              Expanded(
+                flex: 2,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 지역, 시간
+                    Text(
+                      '${match.region}, ${_formatTime(match.time.start)}',
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
+                        color: textMain,
+                        height: 1.2,
                       ),
                     ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: _getStateColor(match.state),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      _getStateText(match.state),
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  const Icon(Icons.access_time, size: 16, color: Colors.grey),
-                  const SizedBox(width: 4),
-                  Text(
-                    app_date.AppDateUtils.formatDateTime(match.time.start),
-                    style: const TextStyle(fontSize: 14, color: Colors.grey),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  const Icon(Icons.people, size: 16, color: Colors.grey),
-                  const SizedBox(width: 4),
-                  Text(
-                    '${match.users.length}명 참가',
-                    style: const TextStyle(fontSize: 14, color: Colors.grey),
-                  ),
-                  if (match.waitlist.isNotEmpty) ...[
-                    const SizedBox(width: 8),
+                    const SizedBox(height: 6),
+                    // 모집 인원, NTRP
                     Text(
-                      '대기 ${match.waitlist.length}명',
-                      style: TextStyle(
+                      '$totalCapacity/$maxCapacity명 모집, NTRP ${match.ntrpRange.min.toStringAsFixed(1)}-${match.ntrpRange.max.toStringAsFixed(1)}',
+                      style: const TextStyle(
                         fontSize: 14,
-                        color: Colors.orange.shade700,
+                        fontWeight: FontWeight.normal,
+                        color: textSecondary,
+                        height: 1.4,
                       ),
+                    ),
+                    const SizedBox(height: 16),
+                    // 시설 아이콘들
+                    Wrap(
+                      spacing: 12,
+                      children: [
+                        if (match.facilities.parking)
+                          const Icon(
+                            Icons.local_parking,
+                            size: 20,
+                            color: textTertiary,
+                          ),
+                        if (match.facilities.water)
+                          const Icon(
+                            Icons.shower,
+                            size: 20,
+                            color: textTertiary,
+                          ),
+                        if (match.facilities.balls)
+                          const Icon(
+                            Icons.roofing,
+                            size: 20,
+                            color: textTertiary,
+                          ),
+                      ],
                     ),
                   ],
-                ],
+                ),
               ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      'NTRP ${match.ntrpRange.min.toStringAsFixed(1)}-${match.ntrpRange.max.toStringAsFixed(1)}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.blue.shade700,
-                      ),
-                    ),
+              const SizedBox(width: 16),
+              // 오른쪽: 이미지
+              Container(
+                width: 96,
+                height: 96,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.grey.shade300,
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: const Icon(
+                    Icons.sports_tennis,
+                    size: 40,
+                    color: Colors.grey,
                   ),
-                  const SizedBox(width: 8),
-                  if (match.facilities.parking)
-                    _FacilityChip(icon: Icons.local_parking, label: '주차'),
-                  if (match.facilities.balls)
-                    _FacilityChip(icon: Icons.sports_tennis, label: '공'),
-                  if (match.facilities.water)
-                    _FacilityChip(icon: Icons.water_drop, label: '물'),
-                ],
+                ),
               ),
             ],
           ),
@@ -123,63 +125,33 @@ class MatchCard extends StatelessWidget {
     );
   }
 
-  Color _getStateColor(MatchState state) {
-    switch (state) {
-      case MatchState.open:
-        return Colors.green;
-      case MatchState.matched:
-        return Colors.blue;
-      case MatchState.completed:
-        return Colors.grey;
+  String _formatTime(DateTime dateTime) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final matchDate = DateTime(dateTime.year, dateTime.month, dateTime.day);
+    
+    String dateStr;
+    if (matchDate == today) {
+      dateStr = '오늘';
+    } else if (matchDate == today.add(const Duration(days: 1))) {
+      dateStr = '내일';
+    } else {
+      final weekday = ['월', '화', '수', '목', '금', '토', '일'][dateTime.weekday - 1];
+      dateStr = weekday;
     }
-  }
-
-  String _getStateText(MatchState state) {
-    switch (state) {
-      case MatchState.open:
-        return '모집중';
-      case MatchState.matched:
-        return '확정';
-      case MatchState.completed:
-        return '완료';
+    
+    final hour = dateTime.hour;
+    final minute = dateTime.minute;
+    String timeStr;
+    if (hour < 12) {
+      timeStr = '오전 $hour:${minute.toString().padLeft(2, '0')}';
+    } else if (hour == 12) {
+      timeStr = '오후 $hour:${minute.toString().padLeft(2, '0')}';
+    } else {
+      timeStr = '오후 ${hour - 12}:${minute.toString().padLeft(2, '0')}';
     }
-  }
-}
-
-/// 시설 칩 위젯
-class _FacilityChip extends StatelessWidget {
-  final IconData icon;
-  final String label;
-
-  const _FacilityChip({
-    required this.icon,
-    required this.label,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(right: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 12, color: Colors.grey.shade700),
-          const SizedBox(width: 2),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              color: Colors.grey.shade700,
-            ),
-          ),
-        ],
-      ),
-    );
+    
+    return '$dateStr $timeStr';
   }
 }
 

@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import '../../../data/models/match_model.dart';
 import '../../../data/repositories/match_repository.dart';
-import '../../../core/utils/async_value_widget.dart';
 import '../../../core/utils/date_utils.dart' as app_date;
 import '../../../features/auth/providers/auth_providers.dart';
 
@@ -70,7 +68,12 @@ class MatchHistorySection extends ConsumerWidget {
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: _getStateColor(match.state).withOpacity(0.1),
+                        color: Color.fromRGBO(
+                          _getStateColor(match.state).red,
+                          _getStateColor(match.state).green,
+                          _getStateColor(match.state).blue,
+                          0.1,
+                        ),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(

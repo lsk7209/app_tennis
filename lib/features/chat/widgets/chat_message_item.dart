@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../../data/models/chat_model.dart';
-import '../../../core/utils/date_utils.dart' as app_date;
 
 /// 채팅 메시지 아이템 위젯
 class ChatMessageItem extends StatelessWidget {
@@ -18,23 +17,34 @@ class ChatMessageItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final currentUserId = FirebaseAuth.instance.currentUser?.uid;
     final isMe = message.senderId == currentUserId;
+    
+    const textMain = Color(0xFF1F2937);
+    const textSecondary = Color(0xFF6B7280);
+    const surfaceLight = Colors.white;
+    const surfaceSubtle = Color(0xFFE7F3E8);
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         mainAxisAlignment:
             isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           if (!isMe) ...[
-            CircleAvatar(
-              radius: 16,
-              child: Text(
-                senderName?.substring(0, 1).toUpperCase() ?? '?',
-                style: const TextStyle(fontSize: 12),
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.grey.shade300,
+              ),
+              child: const Icon(
+                Icons.person,
+                size: 20,
+                color: Colors.grey,
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 10),
           ],
           Flexible(
             child: Column(
@@ -43,23 +53,37 @@ class ChatMessageItem extends StatelessWidget {
               children: [
                 if (!isMe && senderName != null)
                   Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
+                    padding: const EdgeInsets.only(bottom: 6, left: 4),
                     child: Text(
                       senderName!,
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 12,
-                        color: Colors.grey.shade600,
+                        color: textSecondary,
                       ),
                     ),
                   ),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 10,
+                  constraints: BoxConstraints(
+                    maxWidth: MediaQuery.of(context).size.width * 0.8,
                   ),
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: isMe ? Colors.blue : Colors.grey.shade200,
-                    borderRadius: BorderRadius.circular(18),
+                    color: isMe ? surfaceLight : surfaceSubtle,
+                    borderRadius: BorderRadius.only(
+                      topLeft: const Radius.circular(16),
+                      topRight: const Radius.circular(16),
+                      bottomLeft: Radius.circular(isMe ? 16 : 0),
+                      bottomRight: Radius.circular(isMe ? 0 : 16),
+                    ),
+                    boxShadow: isMe
+                        ? [
+                            BoxShadow(
+                              color: const Color.fromRGBO(0, 0, 0, 0.05),
+                              blurRadius: 2,
+                              offset: const Offset(0, 1),
+                            ),
+                          ]
+                        : null,
                   ),
                   child: message.imageUrl != null
                       ? Column(
@@ -86,8 +110,10 @@ class ChatMessageItem extends StatelessWidget {
                                 padding: const EdgeInsets.only(top: 8),
                                 child: Text(
                                   message.text!,
-                                  style: TextStyle(
-                                    color: isMe ? Colors.white : Colors.black87,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    color: textMain,
+                                    height: 1.4,
                                   ),
                                 ),
                               ),
@@ -95,17 +121,19 @@ class ChatMessageItem extends StatelessWidget {
                         )
                       : Text(
                           message.text ?? '',
-                          style: TextStyle(
-                            color: isMe ? Colors.white : Colors.black87,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            color: textMain,
+                            height: 1.4,
                           ),
                         ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.only(top: 4),
+                  padding: const EdgeInsets.only(top: 6),
                   child: Text(
-                    app_date.AppDateUtils.formatRelative(message.createdAt),
+                    _formatTime(message.createdAt),
                     style: TextStyle(
-                      fontSize: 10,
+                      fontSize: 12,
                       color: Colors.grey.shade500,
                     ),
                   ),
@@ -113,21 +141,22 @@ class ChatMessageItem extends StatelessWidget {
               ],
             ),
           ),
-          if (isMe) ...[
-            const SizedBox(width: 8),
-            CircleAvatar(
-              radius: 16,
-              backgroundColor: Colors.blue,
-              child: const Icon(
-                Icons.person,
-                size: 16,
-                color: Colors.white,
-              ),
-            ),
-          ],
         ],
       ),
     );
+  }
+
+  String _formatTime(DateTime dateTime) {
+    final hour = dateTime.hour;
+    final minute = dateTime.minute;
+    
+    if (hour < 12) {
+      return '오전 $hour:${minute.toString().padLeft(2, '0')}';
+    } else if (hour == 12) {
+      return '오후 $hour:${minute.toString().padLeft(2, '0')}';
+    } else {
+      return '오후 ${hour - 12}:${minute.toString().padLeft(2, '0')}';
+    }
   }
 }
 

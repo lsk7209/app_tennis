@@ -1,5 +1,4 @@
 import 'package:go_router/go_router.dart';
-import '../../core/constants/app_constants.dart';
 
 /// 딥링크 핸들러
 class DeepLinkHandler {

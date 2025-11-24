@@ -1,0 +1,106 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isHost(matchId) {
+      return isAuthenticated() && 
+             get(/databases/$(database)/documents/matches/$(matchId)).data.hostId == request.auth.uid;
+    }
+    
+    function isMember(matchId) {
+      return isAuthenticated() && 
+             request.auth.uid in get(/databases/$(database)/documents/matches/$(matchId)).data.users;
+    }
+    
+    function isChatMember(matchId) {
+      return isAuthenticated() && 
+             request.auth.uid in get(/databases/$(database)/documents/chats/$(matchId)).data.members;
+    }
+
+    // Users collection
+    match /users/{userId} {
+      // 자신의 정보만 읽기/쓰기 가능
+      allow read, write: if isOwner(userId);
+      
+      // 프로필 정보는 공개 읽기 가능 (닉네임, NTRP 등)
+      allow read: if isAuthenticated();
+    }
+
+    // Matches collection
+    match /matches/{matchId} {
+      // 개발 단계: 모든 사용자가 읽기 가능
+      allow read: if true;
+      
+      // 개발 단계: 인증 없이도 매칭 생성 가능
+      // 프로덕션에서는 아래 주석 처리된 규칙 사용:
+      // allow create: if isAuthenticated() && 
+      //                  request.resource.data.hostId == request.auth.uid;
+      allow create: if true;
+      
+      // 호스트만 업데이트 가능 (개발 단계에서는 모든 사용자)
+      allow update: if true; // 개발 모드: if isHost(matchId);
+      
+      // 삭제는 호스트만 가능 (개발 단계에서는 모든 사용자)
+      allow delete: if true; // 개발 모드: if isHost(matchId);
+    }
+
+    // Requests collection
+    match /requests/{requestId} {
+      // 신청자는 자신의 신청 조회 가능
+      allow read: if isAuthenticated() && 
+                     (resource.data.applicantId == request.auth.uid ||
+                      isHost(resource.data.matchId));
+      
+      // 인증된 사용자가 신청 생성 가능 (자신의 신청만)
+      allow create: if isAuthenticated() && 
+                       request.resource.data.applicantId == request.auth.uid;
+      
+      // 신청자는 자신의 신청 취소 가능
+      // 호스트는 승인/거절 가능
+      allow update: if isAuthenticated() && 
+                       (resource.data.applicantId == request.auth.uid ||
+                        isHost(resource.data.matchId));
+    }
+
+    // Chats collection
+    match /chats/{matchId} {
+      // 채팅 멤버만 읽기 가능
+      allow read: if isChatMember(matchId);
+      
+      // 채팅 생성은 시스템에서만 (트랜잭션 또는 Cloud Function)
+      allow create: if false; // Cloud Function에서만 생성
+      
+      // 채팅 업데이트는 멤버만 가능
+      allow update: if isChatMember(matchId);
+    }
+
+    // Chat messages subcollection
+    match /chats/{matchId}/messages/{messageId} {
+      // 채팅 멤버만 읽기 가능
+      allow read: if isChatMember(matchId);
+      
+      // 채팅 멤버만 메시지 전송 가능
+      allow create: if isChatMember(matchId) && 
+                       request.resource.data.senderId == request.auth.uid;
+      
+      // 메시지 수정/삭제는 전송자만 가능
+      allow update, delete: if isChatMember(matchId) && 
+                               resource.data.senderId == request.auth.uid;
+    }
+
+    // Reviews collection (내부 저장, UI 비노출)
+    match /reviews/{reviewId} {
+      // 모든 접근 차단 (내부 저장만)
+      allow read, write: if false;
+    }
+  }
+}
+

@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../data/models/match_model.dart';
-import '../../../data/models/user_model.dart';
 import '../../../data/repositories/match_repository.dart';
 import '../../../data/repositories/user_repository.dart';
 import '../../../core/utils/match_filter_utils.dart';
@@ -8,12 +7,24 @@ import '../../../core/utils/match_filter_utils.dart';
 /// 매칭 목록 프로바이더
 final matchesProvider = StreamProvider.family<List<MatchModel>, MatchFilter>(
   (ref, filter) {
-    final matchRepo = ref.watch(matchRepositoryProvider);
-    return matchRepo.getMatches(
-      region: filter.region,
-      startAfter: filter.startAfter,
-      limit: filter.limit,
-    );
+    try {
+      final matchRepo = ref.watch(matchRepositoryProvider);
+      return matchRepo.getMatches(
+        region: filter.region,
+        startAfter: filter.startAfter,
+        limit: filter.limit,
+      ).handleError((error, stackTrace) {
+        print('매칭 목록 프로바이더 오류: $error');
+        print('스택: $stackTrace');
+        // 에러 발생 시 빈 리스트 반환
+        return <MatchModel>[];
+      });
+    } catch (e, stackTrace) {
+      print('매칭 목록 프로바이더 초기화 오류: $e');
+      print('스택: $stackTrace');
+      // 에러 발생 시 빈 스트림 반환
+      return Stream.value(<MatchModel>[]);
+    }
   },
 );
 

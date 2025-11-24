@@ -41,9 +41,30 @@ class FcmService {
 
   /// 포그라운드 메시지 처리
   void _handleForegroundMessage(RemoteMessage message) {
-    // 포그라운드에서 알림을 표시하려면 flutter_local_notifications 필요
-    // 여기서는 기본 처리만
-    print('포그라운드 메시지: ${message.notification?.title}');
+    // 포그라운드에서 알림을 표시하려면 flutter_local_notifications 패키지 필요
+    // 현재는 로그만 출력
+    // TODO: flutter_local_notifications 패키지 추가 후 구현
+    // 예시:
+    // final notification = message.notification;
+    // if (notification != null) {
+    //   await _localNotifications.show(
+    //     notification.hashCode,
+    //     notification.title ?? '알림',
+    //     notification.body ?? '',
+    //     NotificationDetails(...),
+    //   );
+    // }
+    
+    print('포그라운드 메시지 수신:');
+    print('  제목: ${message.notification?.title}');
+    print('  내용: ${message.notification?.body}');
+    print('  데이터: ${message.data}');
+    
+    // 데이터에 route가 있으면 딥링크 처리 가능
+    if (message.data.containsKey('route')) {
+      // 전역 네비게이터를 통해 라우팅
+      // TODO: 전역 네비게이터 설정 필요
+    }
   }
 
   /// 백그라운드 메시지 처리 (앱이 열린 상태에서 알림 클릭)

@@ -74,7 +74,6 @@ class ReviewRepository {
       // 평균 평점 계산
       final ratings = reviews
           .map((r) => r['rating'] as int)
-          .where((r) => r != null)
           .toList();
 
       if (ratings.isEmpty) return;

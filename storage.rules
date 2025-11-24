@@ -1,0 +1,41 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Helper function
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isChatMember(matchId) {
+      return isAuthenticated() && 
+             firestore.exists(/databases/(default)/documents/chats/$(matchId)) &&
+             request.auth.uid in firestore.get(/databases/(default)/documents/chats/$(matchId)).data.members;
+    }
+
+    // Chat images
+    match /chats/{matchId}/{fileName} {
+      // 채팅 멤버만 읽기 가능
+      allow read: if isChatMember(matchId);
+      
+      // 채팅 멤버만 업로드 가능
+      allow write: if isChatMember(matchId) &&
+                     request.resource.size < 2 * 1024 * 1024 && // 2MB 제한
+                     request.resource.contentType.matches('image/.*');
+      
+      // 삭제는 업로드한 사용자만 가능
+      allow delete: if isChatMember(matchId);
+    }
+
+    // User profile images (향후 확장용)
+    match /users/{userId}/{fileName} {
+      // 자신의 프로필 이미지만 읽기/쓰기 가능
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && 
+                     request.auth.uid == userId &&
+                     request.resource.size < 5 * 1024 * 1024 && // 5MB 제한
+                     request.resource.contentType.matches('image/.*');
+      allow delete: if isAuthenticated() && request.auth.uid == userId;
+    }
+  }
+}
+
